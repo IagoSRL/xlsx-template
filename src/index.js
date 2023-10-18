@@ -1288,6 +1288,16 @@ class Workbook {
             }
 
         });
+
+        // Update hyperlinks refs
+        sheet.findall("hyperlinks/hyperlink").forEach(function (hyperlink) {
+            var ref = self.splitRef(hyperlink.attrib.ref);
+            var colNumber = self.charToNum(ref.col);
+            if (colNumber > currentCol) {
+                ref.col = self.numToChar(colNumber + numCols);
+                hyperlink.attrib.ref = self.joinRef(ref);
+            }
+        });
     }
     // Look for any merged cell, named table or named range definitions below
     // `currentRow` and push down by `numRows` (used when rows are inserted).
@@ -1390,11 +1400,20 @@ class Workbook {
             }
 
         });
+
+        // Update hyperlinks refs
+        sheet.findall("hyperlinks/hyperlink").forEach(function (hyperlink) {
+            var ref = self.splitRef(hyperlink.attrib.ref);
+            if (ref.row > currentRow) {
+                ref.row += numRows;
+                hyperlink.attrib.ref = self.joinRef(ref);
+            }
+        });
     }
     getWidthCell(numCol, sheet) {
         var defaultWidth = sheet.root.find("sheetFormatPr").attrib["defaultColWidth"];
         if (!defaultWidth) {
-            // TODO : Check why defaultColWidth is not set ? 
+            // TODO : Check why defaultColWidth is not set ?
             defaultWidth = 11.42578125;
         }
         var finalWidth = defaultWidth;
@@ -1447,7 +1466,7 @@ class Workbook {
     }
     columnWidthToEMUs(width) {
         // TODO : This is not the true. Change with true calcul
-        // can find help here : 
+        // can find help here :
         // https://docs.microsoft.com/en-us/office/troubleshoot/excel/determine-column-widths
         // https://stackoverflow.com/questions/58021996/how-to-set-the-fixed-column-width-values-in-inches-apache-poi
         // https://poi.apache.org/apidocs/dev/org/apache/poi/ss/usermodel/Sheet.html#setColumnWidth-int-int-
@@ -1462,9 +1481,9 @@ class Workbook {
     }
     /**
      * Find max file id.
-     * @param {RegExp} fileNameRegex 
-     * @param {RegExp} idRegex 
-     * @returns {number} 
+     * @param {RegExp} fileNameRegex
+     * @param {RegExp} idRegex
+     * @returns {number}
      */
     findMaxFileId(fileNameRegex, idRegex) {
         var self = this;
