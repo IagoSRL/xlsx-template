@@ -281,6 +281,35 @@ describe("CRUD operations", function() {
 
         });
 
+        it("can include a literal colon in between two placeholders in the same cell (with and without newlines in between)", function(done) {
+
+            fs.readFile(path.join(__dirname, "templates", "colon-allowed-between-placeholders.xlsx"), function(err, data) {
+                expect(err).toBeNull();
+
+                var t = new XlsxTemplate(data);
+
+                t.substitute(1, {
+                    foo: "f-value",
+                    bar: "b-value",
+                });
+
+                var newData = t.generate();
+
+                var sharedStrings = etree.parse(t.archive.file("xl/sharedStrings.xml").asText()).getroot(),
+                    sheet1        = etree.parse(t.archive.file("xl/worksheets/sheet1.xml").asText()).getroot();
+
+                expect(sheet1).toBeDefined();
+                expect(getSharedString(sharedStrings, sheet1, "A1")).toEqual("f-value and colon in between: b-value on same line");
+                expect(getSharedString(sharedStrings, sheet1, "A2")).toEqual("f-value\nand colon in between: b-value\non different lines");
+
+                // XXX: For debugging only
+                fs.writeFileSync("test/output/colon-allowed-between-placeholders.xlsx", newData, "binary");
+
+                done();
+            });
+
+        });
+
 		it("can substitute values when single item array contains an object and generate a file", function(done) {
 
             fs.readFile(path.join(__dirname, "templates", "t3.xlsx"), function(err, data) {
@@ -602,6 +631,57 @@ describe("CRUD operations", function() {
 
         });
 
+        it("moves rows down when filling tables with merged line cell", function(done) {
+
+            fs.readFile(path.join(__dirname, "templates", "test-tables-merged-line.xlsx"), function(err, data) {
+                expect(err).toBeNull();
+
+                var t = new XlsxTemplate(data);
+
+                t.substitute("Tables", {
+                    score_first: {name: "Jason", score: 1},
+                    scores: [
+                        {name: "John", score: 100, extra:'O'},
+                        {name: "Bob", score: 110, extra:'O'}, 
+                        {name: "Jim", score: 120, extra:'O'}
+                    ],
+                    score_last: {name: "Fox", score: 99},
+
+                    score2_first: {name: "Daddy", score: 1},
+                    scores2: [
+                        {name: "Son1", score: 100, extra:'O'},
+                        {name: "Son2", score: 110, extra:'O'}, 
+                        {name: "Son3", score: 120, extra:'O'},
+                        {name: "Son4", score: 130, extra:'O'}
+                    ],
+                    score2_last: {name: "Mom", score: 99},
+                });
+
+                var newData = t.generate();
+
+                var sharedStrings = etree.parse(t.archive.file("xl/sharedStrings.xml").asText()).getroot(),
+                    sheet1        = etree.parse(t.archive.file("xl/worksheets/sheet1.xml").asText()).getroot();
+
+                expect(sheet1.find("./sheetData/row[@r='8']/c[@r='B8']").attrib.s).toEqual("3");
+                expect(sheet1.find("./sheetData/row[@r='8']/c[@r='B8']/v").text).toEqual("23");
+                expect(sheet1.find("./sheetData/row[@r='8']/c[@r='C8']").attrib.s).toEqual("4");
+
+                expect(sheet1.find("./sheetData/row[@r='8']/c[@r='D8']").attrib.s).toEqual("5");
+                expect(sheet1.find("./sheetData/row[@r='8']/c[@r='E8']").attrib.s).toEqual("6");
+                expect(sheet1.find("./sheetData/row[@r='8']/c[@r='F8']").attrib.s).toEqual("7");
+
+                expect(sheet1.find("./sheetData/row[@r='18']/c[@r='B18']").attrib.s).toEqual("3");
+                expect(sheet1.find("./sheetData/row[@r='18']/c[@r='C18']").attrib.s).toEqual("4");
+                expect(sheet1.find("./sheetData/row[@r='18']/c[@r='D18']").attrib.s).toEqual("5");
+
+                // XXX: For debugging only
+                fs.writeFileSync("test/output/test-tables-merged-line-out.xlsx", newData, "binary");
+
+                done();
+            });
+
+        });
+        
         it("replaces hyperlinks in sheet", function(done) {
           fs.readFile(path.join(__dirname, "templates", "test-hyperlinks.xlsx"), function(err, data) {
             expect(err).toBeNull();
@@ -1095,6 +1175,80 @@ describe("CRUD operations", function() {
                 //TODO : How can i compare the jpg file in the archive with my imgB64 variable ?
                 //var image = t.archive.file("xl/media/image1.jpg");
                 fs.writeFileSync("test/output/insert_image.xlsx", newData, "binary");
+                done();
+            });
+        });
+
+        it("Insert imageincells and create rels", function(done) {
+            fs.readFile(path.join(__dirname, 'templates', 'test-insert-images_in_cell.xlsx'), function(err, data) {
+                expect(err).toBeNull();
+                var option = {
+                    imageRootPath : path.join(__dirname, 'templates', 'dataset')
+                }
+                var t = new XlsxTemplate(data, option);
+                var imgB64 = 'iVBORw0KGgoAAAANSUhEUgAAALAAAAA2CAYAAABnXhObAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsIAAA7CARUoSoAAAAUjSURBVHhe7ZtbyGVjGMfXlmmccpqRcYgZmQsTMeVYQiJzozEYJRHCcCUaNy5kyg3KhUNEhjSRbwipIcoF0pRpxiFiLsYUIqcoZ8b2/6/1vKtnv3u9+/smuXjW/v/qv593PetZa+/17f9617vetb9BVVVDSIiQ7GFRiJC0PfBwOGRbiBAMBoPat+qBRWhkYBEaGViERgYWoZGBRWhkYBEaGViERgYWoZGBRWhkYBEaGViERgYWoZGBRWhkYBEaGViERgYWoenND9oHg8EFCOdBPJ57cDzfWf5MhLPZBr9AL2LdzmZxFNTui3AdtF+dqKqtqH3F2iOg9g6EVLcFdTPW7gT1CxAuhE6FFkG/Ql9Cm7HtC4gtqL0S4ehmaRzU32XNiWA/VyGcDGGT4c11sifg2Np/hWODB8iXsAJ3p2OBznL5rS5Pfey38wJPuzpqe6HuXFdDfdRVlwRo9r+stkvboYWu/ifLlzTP7z8XOBZ63mqTDuyqjap0XNMwhGCvStjjkeNw9q6ydgtyCxEub5Za5lnMWW0xsQzbn2btEZBfh0DtWSeq6h3oQeghaBMTYCl0UtMc4U/obegN6FXoJWgGXyBPhk7wfrcgfAJdXCemgNrJ3t0RBUo98KeW+wCiIdjmMCLfnpdYNrw+y+us9ltb/6FFisOWvO4Ut/4HaHWh5j7odJdLPfAXvnYuAk/Ztuuhn61NqQcOzt/QM02zWome6gBrJzj2Jey9imC7lQjsrcn1FsmlFj33WiS34Q+/0dotyL0L3QptttR/hT32cuzvWkQec6+ZNgNvaJo1ay3SlLyxOr5Zqm6wWKI1qpluW7NULcF+zrE29zkfId08sid/3Nq7BfazwMvSRfA+j0Lv2eIui71lqgyML/Z1xO+bxepqi+RGizTAW9Ycw0yZxr+8VJP7LZJLLJJjLBIOY2qwj1XQRtOM6VmIMxM5R0CcTWmFunRSzAX1wD0ifZnpMn4kzHCita+xyLEoKX3xNC9NTB7mCwz/ZL3U4A18sEWSThpyCMRenOL+qMsgfxNXD/IKTFqXox64RyRTcqossQ4mvsna5AmLacYinxv3sw9/YNvlFNpp/HoYlldY+2uLhLMMiTchvifFGYlJcJ6YJ0IrnDDcfq703sCkvpsDfAkrMNssxGsut8Ny1O8W2xkHQPOxsdPleOPGxmx6zG3Dyz4bfI9FKe/WP2DrqRUu/6PldnsWwgvwgU3av2YhguOHBX42IA0J/Fj2N4se3/tOwg8j0qwH3+POpjnC/z1G1RCipzxn0eMfBU8y8C70AINcyKeT4iAMIy6y9u3QN02zWoP8y9D50OHQMuTOaFaVQd0JuWxVJ1i/N7SUwqI/QY5CbjG0vy33hrorBmPddCSB2YYQm7L69y3ftW6L5eshBFhiy9R6X5sEOD+caja4PG8QeROX1pXUNYQoaX6qzQV4JcnrvTo/fzSl45nWHpj4YUT+Q5y8B+YPhRJ8nDsG/qjMf9UsVVdYZJ43hpxS4+NjPsHL4Xj8EdTxUXEi7adE/Q0WKD5mNno1rOClr7FzcxkMDS6P+zDiWNIsQg3yeyHHG6kRmGcsrfP50r5zZqvD+sUIh0L8ZdznqONj4zHSZ+ui6/N6sG2xY8K2/1gzNDjG2re9MrCYHpKBp3kIIXqADCxCIwOL0MjAIjQysAiNDCxCIwOL0MjAIjQysAiNDCxCIwOL0MjAIjQysAiNDCxCIwOL0MjAIjQysAhN+x8ZQkREPbAITFX9C5ozpqaetbGcAAAAAElFTkSuQmCC';
+
+                t.substitute('init_rels', {
+                    imgB64 : imgB64,
+                });
+                var newData = t.generate();
+                var richDataFile = etree.parse(t.archive.file("xl/richData/_rels/richValueRel.xml.rels").asText()).getroot();
+                expect(richDataFile.findall("Relationship").length).toEqual(4);
+                var richDataFile = etree.parse(t.archive.file("xl/richData/rdrichvalue.xml").asText()).getroot();
+                expect(richDataFile.findall("rv").length).toEqual(4);
+                expect(parseInt(richDataFile.attrib.count)).toEqual(richDataFile.findall("rv").length);
+                var richDataFile = etree.parse(t.archive.file("xl/richData/richValueRel.xml").asText()).getroot();
+                expect(richDataFile.findall("rel").length).toEqual(4);
+                var richDataFile = etree.parse(t.archive.file("xl/metadata.xml").asText()).getroot();
+                expect(parseInt(richDataFile.find('futureMetadata').attrib.count)).toEqual(4);
+                expect(parseInt(richDataFile.find('valueMetadata').attrib.count)).toEqual(4);
+                expect(richDataFile.find('futureMetadata').findall("bk").length).toEqual(4);
+                expect(richDataFile.find('valueMetadata').findall("bk").length).toEqual(4);
+                var sheet1 = etree.parse(t.archive.file("xl/worksheets/sheet1.xml").asText()).getroot();
+                expect(sheet1.find("./sheetData/row[@r='3']/c[@r='B3']").attrib.vm).toEqual("1");
+                expect(sheet1.find("./sheetData/row[@r='5']/c[@r='K5']").attrib.vm).toEqual("2");
+                expect(sheet1.find("./sheetData/row[@r='6']/c[@r='D6']").attrib.vm).toEqual("3");
+                expect(sheet1.find("./sheetData/row[@r='10']/c[@r='H10']").attrib.vm).toEqual("4");
+                fs.writeFileSync('test/output/insert_imageincell.xlsx', newData, 'binary');
+                done();
+            });
+        });
+
+        it("Insert imageincells table", function(done) {
+            fs.readFile(path.join(__dirname, 'templates', 'test-insert-images_in_cell.xlsx'), function(err, data) {
+                expect(err).toBeNull();
+                var option = {
+                    imageRootPath : path.join(__dirname, 'templates', 'dataset')
+                }
+                var t = new XlsxTemplate(data, option);
+                var imgB64 = 'iVBORw0KGgoAAAANSUhEUgAAALAAAAA2CAYAAABnXhObAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsIAAA7CARUoSoAAAAUjSURBVHhe7ZtbyGVjGMfXlmmccpqRcYgZmQsTMeVYQiJzozEYJRHCcCUaNy5kyg3KhUNEhjSRbwipIcoF0pRpxiFiLsYUIqcoZ8b2/6/1vKtnv3u9+/smuXjW/v/qv593PetZa+/17f9617vetb9BVVVDSIiQ7GFRiJC0PfBwOGRbiBAMBoPat+qBRWhkYBEaGViERgYWoZGBRWhkYBEaGViERgYWoZGBRWhkYBEaGViERgYWoZGBRWhkYBEaGViERgYWoenND9oHg8EFCOdBPJ57cDzfWf5MhLPZBr9AL2LdzmZxFNTui3AdtF+dqKqtqH3F2iOg9g6EVLcFdTPW7gT1CxAuhE6FFkG/Ql9Cm7HtC4gtqL0S4ehmaRzU32XNiWA/VyGcDGGT4c11sifg2Np/hWODB8iXsAJ3p2OBznL5rS5Pfey38wJPuzpqe6HuXFdDfdRVlwRo9r+stkvboYWu/ifLlzTP7z8XOBZ63mqTDuyqjap0XNMwhGCvStjjkeNw9q6ydgtyCxEub5Za5lnMWW0xsQzbn2btEZBfh0DtWSeq6h3oQeghaBMTYCl0UtMc4U/obegN6FXoJWgGXyBPhk7wfrcgfAJdXCemgNrJ3t0RBUo98KeW+wCiIdjmMCLfnpdYNrw+y+us9ltb/6FFisOWvO4Ut/4HaHWh5j7odJdLPfAXvnYuAk/Ztuuhn61NqQcOzt/QM02zWome6gBrJzj2Jey9imC7lQjsrcn1FsmlFj33WiS34Q+/0dotyL0L3QptttR/hT32cuzvWkQec6+ZNgNvaJo1ay3SlLyxOr5Zqm6wWKI1qpluW7NULcF+zrE29zkfId08sid/3Nq7BfazwMvSRfA+j0Lv2eIui71lqgyML/Z1xO+bxepqi+RGizTAW9Ycw0yZxr+8VJP7LZJLLJJjLBIOY2qwj1XQRtOM6VmIMxM5R0CcTWmFunRSzAX1wD0ifZnpMn4kzHCita+xyLEoKX3xNC9NTB7mCwz/ZL3U4A18sEWSThpyCMRenOL+qMsgfxNXD/IKTFqXox64RyRTcqossQ4mvsna5AmLacYinxv3sw9/YNvlFNpp/HoYlldY+2uLhLMMiTchvifFGYlJcJ6YJ0IrnDDcfq703sCkvpsDfAkrMNssxGsut8Ny1O8W2xkHQPOxsdPleOPGxmx6zG3Dyz4bfI9FKe/WP2DrqRUu/6PldnsWwgvwgU3av2YhguOHBX42IA0J/Fj2N4se3/tOwg8j0qwH3+POpjnC/z1G1RCipzxn0eMfBU8y8C70AINcyKeT4iAMIy6y9u3QN02zWoP8y9D50OHQMuTOaFaVQd0JuWxVJ1i/N7SUwqI/QY5CbjG0vy33hrorBmPddCSB2YYQm7L69y3ftW6L5eshBFhiy9R6X5sEOD+caja4PG8QeROX1pXUNYQoaX6qzQV4JcnrvTo/fzSl45nWHpj4YUT+Q5y8B+YPhRJ8nDsG/qjMf9UsVVdYZJ43hpxS4+NjPsHL4Xj8EdTxUXEi7adE/Q0WKD5mNno1rOClr7FzcxkMDS6P+zDiWNIsQg3yeyHHG6kRmGcsrfP50r5zZqvD+sUIh0L8ZdznqONj4zHSZ+ui6/N6sG2xY8K2/1gzNDjG2re9MrCYHpKBp3kIIXqADCxCIwOL0MjAIjQysAiNDCxCIwOL0MjAIjQysAiNDCxCIwOL0MjAIjQysAiNDCxCIwOL0MjAIjQysAhN+x8ZQkREPbAITFX9C5ozpqaetbGcAAAAAElFTkSuQmCC';
+
+                t.substitute('table_image_in_cell', {
+                    imgArray : [
+                        {filename : imgB64},
+                        {filename : imgB64},
+                        {filename : imgB64},
+                    ],
+                    someText : "Hello ImageInCell",
+                });
+                var newData = t.generate();
+                var richDataFile = etree.parse(t.archive.file("xl/richData/_rels/richValueRel.xml.rels").asText()).getroot();
+                expect(richDataFile.findall("Relationship").length).toEqual(3);
+                var richDataFile = etree.parse(t.archive.file("xl/richData/rdrichvalue.xml").asText()).getroot();
+                expect(richDataFile.findall("rv").length).toEqual(3);
+                expect(parseInt(richDataFile.attrib.count)).toEqual(richDataFile.findall("rv").length);
+                var richDataFile = etree.parse(t.archive.file("xl/richData/richValueRel.xml").asText()).getroot();
+                expect(richDataFile.findall("rel").length).toEqual(3);
+                var richDataFile = etree.parse(t.archive.file("xl/metadata.xml").asText()).getroot();
+                expect(parseInt(richDataFile.find('futureMetadata').attrib.count)).toEqual(3);
+                expect(parseInt(richDataFile.find('valueMetadata').attrib.count)).toEqual(3);
+                expect(richDataFile.find('futureMetadata').findall("bk").length).toEqual(3);
+                expect(richDataFile.find('valueMetadata').findall("bk").length).toEqual(3);
+                var sheet = etree.parse(t.archive.file("xl/worksheets/sheet2.xml").asText()).getroot();
+                expect(sheet.find("./sheetData/row[@r='2']/c[@r='A2']").attrib.vm).toEqual("1");
+                expect(sheet.find("./sheetData/row[@r='3']/c[@r='A3']").attrib.vm).toEqual("2");
+                expect(sheet.find("./sheetData/row[@r='4']/c[@r='A4']").attrib.vm).toEqual("3");
+                fs.writeFileSync('test/output/insert_imageincell_table.xlsx', newData, 'binary');
                 done();
             });
         });
